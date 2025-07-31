@@ -1,0 +1,204 @@
+
+// Pinos dos motores
+const int IN1 = 27;
+const int IN2 = 14;
+const int IN3 = 12;
+const int IN4 = 13;
+const int ENA = 21;
+const int ENB = 22;
+
+// Sensores
+const int IRMID = 33;
+const int IRL1 = 25;
+const int IRL2 = 26;
+const int IRR1 = 32;
+const int IRR2 = 35;
+
+// PWM
+const int speed = 190;
+const int curveSpeed = 50;      // Curva suave (velocidade mais baixa)
+const int searchSpeed = 120;
+const int backSpeed = 120;
+
+// Memória da última direção
+String lastDirection = "forward";
+unsigned long lostTime = 0;
+bool searching = false;
+
+void setup() {
+  // Motores
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  // Sensores
+  pinMode(IRMID, INPUT);
+  pinMode(IRL1, INPUT);
+  pinMode(IRL2, INPUT);
+  pinMode(IRR1, INPUT);
+  pinMode(IRR2, INPUT);
+
+  stopMotors();
+}
+
+void loop() {
+  int MID = digitalRead(IRMID);
+  int L1 = digitalRead(IRL1);
+  int L2 = digitalRead(IRL2);
+  int R1 = digitalRead(IRR1);
+  int R2 = digitalRead(IRR2);
+
+  // Lógica para pista preta com linha branca
+  if (MID == LOW) {
+    forwardMotors();
+    lastDirection = "forward";
+    searching = false;
+  }
+  else if (L1 == LOW) {
+    adjustRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R1 == LOW) {
+    adjustLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else if (L2 == LOW) {
+    turnRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R2 == LOW) {
+    turnLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else {
+    if (!searching) {
+      lostTime = millis();
+      searching = true;
+    }
+    searchLine();
+  }
+
+  delay(5);
+}
+
+// Movimento
+void forwardMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speed);
+  analogWrite(ENB, speed);
+}
+
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}
+
+void adjustRight() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speed);
+  analogWrite(ENB, curveSpeed);  // Direita mais lenta
+}
+
+void adjustLeft() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, curveSpeed);  // Esquerda mais lenta
+  analogWrite(ENB, speed);
+}
+
+// ✅ NOVAS curvas com uma roda parada
+void turnRight() {
+  // Esquerda anda pra frente
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, speed);
+
+  // Direita parada
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, 0);
+}
+
+void turnLeft() {
+  // Esquerda parada
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+
+  // Direita anda pra frente
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENB, speed);
+}
+
+// Busca inteligente
+void searchLine() {
+  unsigned long currentTime = millis();
+  unsigned long elapsed = currentTime - lostTime;
+
+  if (elapsed < 2000) {
+    if (lastDirection == "right") {
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, LOW);
+    }
+    else if (lastDirection == "left") {
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, LOW);
+      digitalWrite(IN3, LOW);
+      digitalWrite(IN4, HIGH);
+    }
+    else {
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, LOW);
+    }
+    analogWrite(ENA, searchSpeed);
+    analogWrite(ENB, searchSpeed);
+  }
+  else if (elapsed < 4000) {
+    if (lastDirection == "right") {
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, LOW);
+      digitalWrite(IN3, LOW);
+      digitalWrite(IN4, HIGH);
+    }
+    else {
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, LOW);
+    }
+    analogWrite(ENA, searchSpeed);
+    analogWrite(ENB, searchSpeed);
+  }
+  else {
+    // Ré girando
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3, HIGH);
+    digitalWrite(IN4, LOW);
+    analogWrite(ENA, backSpeed);
+    analogWrite(ENB, backSpeed);
+  }
