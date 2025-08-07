@@ -1,0 +1,179 @@
+// Pinos dos motores
+const int IN1 = 27;
+const int IN2 = 14;
+const int IN3 = 12;
+const int IN4 = 13;
+const int ENA = 21;
+const int ENB = 22;
+
+// Sensores
+const int IRMID = 33;
+const int IRL1 = 25;
+const int IRL2 = 26;
+const int IRR1 = 32;
+const int IRR2 = 35;
+const int IRBACK = 19;
+
+// Botão de modo
+const int BOTAO_MODO = 18;
+
+// PWM
+const int speed = 200;
+const int curveSpeed = 150;
+const int searchSpeed = 150;
+const int backSpeed = 150;
+
+// Controle de tempo e estado
+String lastDirection = "forward";
+unsigned long lostTime = 0;
+bool searching = false;
+unsigned long startTime = 0;
+unsigned long delayIRBack = 20000;
+bool paradoPeloSensorBack = false;
+bool modoLinhaPreta = true; // true = linha preta em fundo branco, false = linha branca em fundo preto
+bool botaoEstadoAnterior = HIGH;
+
+void setup() {
+  // Motores
+  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);
+
+  // Sensores
+  pinMode(IRMID, INPUT);
+  pinMode(IRL1, INPUT);
+  pinMode(IRL2, INPUT);
+  pinMode(IRR1, INPUT);
+  pinMode(IRR2, INPUT);
+  pinMode(IRBACK, INPUT);
+
+  // Botão
+  pinMode(BOTAO_MODO, INPUT_PULLUP);
+
+  stopMotors();
+  delay(2000);
+  startTime = millis();
+}
+
+void loop() {
+  if (paradoPeloSensorBack) {
+    stopMotors();
+    return;
+  }
+
+  // Alternar modo com botão (detecção de borda)
+  bool botaoEstadoAtual = digitalRead(BOTAO_MODO);
+  if (botaoEstadoAtual == LOW && botaoEstadoAnterior == HIGH) {
+    modoLinhaPreta = !modoLinhaPreta;
+    delay(300); // debounce
+  }
+  botaoEstadoAnterior = botaoEstadoAtual;
+
+  // Leitura do sensor traseiro (fim de percurso)
+  if (millis() - startTime >= delayIRBack) {
+    if (digitalRead(IRBACK) == LOW) {
+      delay(500);
+      stopMotors();
+      paradoPeloSensorBack = true;
+      return;
+    }
+  }
+
+  // Chamada da lógica correspondente
+  if (modoLinhaPreta) {
+    pistaBrancaLinhaPreta(); // linha preta sobre pista branca
+  } else {
+    pistaPretaLinhaBranca(); // linha branca sobre pista preta
+  }
+
+  delay(5);
+}
+
+
+
+
+
+VOIDS
+void pistaBrancaLinhaPreta() {
+  int MID = digitalRead(IRMID);
+  int L1 = digitalRead(IRL1);
+  int L2 = digitalRead(IRL2);
+  int R1 = digitalRead(IRR1);
+  int R2 = digitalRead(IRR2);
+
+  if (MID == LOW) {
+    forwardMotors();
+    lastDirection = "forward";
+    searching = false;
+  }
+  else if (L1 == LOW) {
+    adjustRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R1 == LOW) {
+    adjustLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else if (L2 == LOW) {
+    turnRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R2 == LOW) {
+    turnLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else {
+    if (!searching) {
+      lostTime = millis();
+      searching = true;
+    }
+    searchLine();
+  }
+}
+
+
+void pistaPretaLinhaBranca() {
+  int MID = digitalRead(IRMID);
+  int L1 = digitalRead(IRL1);
+  int L2 = digitalRead(IRL2);
+  int R1 = digitalRead(IRR1);
+  int R2 = digitalRead(IRR2);
+
+  if (MID == HIGH) {
+    forwardMotors();
+    lastDirection = "forward";
+    searching = false;
+  }
+  else if (L1 == HIGH) {
+    adjustRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R1 == HIGH) {
+    adjustLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else if (L2 == HIGH) {
+    turnRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R2 == HIGH) {
+    turnLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else {
+    if (!searching) {
+      lostTime = millis();
+      searching = true;
+    }
+    searchLine();
+  }
+}
+
