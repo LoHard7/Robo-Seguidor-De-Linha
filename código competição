@@ -47,6 +47,7 @@ void setup() {
 
 
   stopMotors();
+  delay(2000);
    startTime = millis(); // marca o tempo em que o robô começou
 }
 
