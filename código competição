@@ -1,0 +1,225 @@
+// Pinos dos motores
+const int IN1 = 27;
+const int IN2 = 14;
+const int IN3 = 12;
+const int IN4 = 13;
+const int ENA = 21;
+const int ENB = 22;
+
+// Sensores
+const int IRMID = 33; //sensor do meio
+const int IRL1 = 25; // sensor esquerdo do meio
+const int IRL2 = 26; // sensor esquerdo da ponta
+const int IRR1 = 32; // sensor direito do meio
+const int IRR2 = 35; // sensor direito da ponta
+const int IRBACK = 19; // sensor traseiro
+
+// PWM
+const int speed = 200;
+const int curveSpeed = 150;      // velocidade de curva 
+const int searchSpeed = 150;     // velocidade de busca
+const int backSpeed = 150;       // velocidade de marcha ré
+
+// Memória da última direção
+String lastDirection = "forward";
+unsigned long lostTime = 0;
+bool searching = false;
+unsigned long startTime = 0;       // tempo desde que o esp ligou
+unsigned long delayIRBack = 20000; // contando 20 segundos
+
+
+void setup() {
+  // definindo os Motores
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  // definindo os Sensores
+  pinMode(IRMID, INPUT);
+  pinMode(IRL1, INPUT);
+  pinMode(IRL2, INPUT);
+  pinMode(IRR1, INPUT);
+  pinMode(IRR2, INPUT);
+  pinMode(IRBACK, INPUT);
+
+
+  stopMotors();
+   startTime = millis(); // marca o tempo em que o robô começou
+}
+
+bool paradoPeloSensorBack = false;  // sensor começa desligado
+
+void loop() {
+  if (paradoPeloSensorBack) {
+    stopMotors();  // garante que fique parado pra sempre
+    return;
+  }
+
+  int MID = digitalRead(IRMID);
+  int L1 = digitalRead(IRL1);
+  int L2 = digitalRead(IRL2);
+  int R1 = digitalRead(IRR1);
+  int R2 = digitalRead(IRR2);
+  int BACK = digitalRead(IRBACK);
+
+  //  verifica se passou o tempo antes de ativar sensor traseiro
+  if (millis() - startTime >= delayIRBack) {
+    if (BACK == LOW) {
+      delay(500);
+      stopMotors();
+      paradoPeloSensorBack = true;  // fim de percurso, não anda até resetar
+      return;
+    }
+  }
+//BY LOHARD
+  //logica pista preta, linhas brancas
+  if (MID == HIGH) {
+    forwardMotors();
+    lastDirection = "forward";
+    searching = false;
+  }
+  else if (L1 == HIGH) {
+    adjustRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R1 == HIGH) {
+    adjustLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else if (L2 == HIGH) {
+    turnRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R2 == HIGH) {
+    turnLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else {
+    if (!searching) {
+      lostTime = millis();
+      searching = true;
+    }
+    searchLine();
+  }
+
+  delay(5);
+}
+
+//  Movimento
+void forwardMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speed);
+  analogWrite(ENB, speed);
+}
+
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}
+
+void adjustRight() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speed);
+  analogWrite(ENB, curveSpeed);
+}
+
+void adjustLeft() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, curveSpeed);  
+  analogWrite(ENB, speed);
+}
+
+void turnRight() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, speed);
+  analogWrite(ENB, speed);
+}
+
+void turnLeft() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speed);
+  analogWrite(ENB, speed);
+}
+
+// busca inteligente pela linha
+void searchLine() {
+  unsigned long currentTime = millis();
+  unsigned long elapsed = currentTime - lostTime;
+
+  if (elapsed < 2000) {
+    // primeira tentativa, gira pro lado da última curva
+    if (lastDirection == "right") {
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, LOW);
+    }
+    else if (lastDirection == "left") {
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, LOW);
+      digitalWrite(IN3, LOW);
+      digitalWrite(IN4, HIGH);
+    }
+    else {
+      // se estava andando reto, escolhe direita
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, LOW);
+    }
+    analogWrite(ENA, searchSpeed);
+    analogWrite(ENB, searchSpeed);
+  }
+  else if (elapsed < 4000) {
+    // segunda tentativa, inverte o lado
+    if (lastDirection == "right") {
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, LOW);
+      digitalWrite(IN3, LOW);
+      digitalWrite(IN4, HIGH);
+    }
+    else {
+      digitalWrite(IN1, LOW);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, LOW);
+    }
+    analogWrite(ENA, searchSpeed);
+    analogWrite(ENB, searchSpeed);
+  }
+  else {
+    // terceira tentativa, marcha ré girando
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3, HIGH);
+    digitalWrite(IN4, LOW);
+    analogWrite(ENA, backSpeed);
+    analogWrite(ENB, backSpeed);
+  }
+}
