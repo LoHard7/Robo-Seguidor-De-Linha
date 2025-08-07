@@ -25,7 +25,7 @@ String lastDirection = "forward";
 unsigned long lostTime = 0;
 bool searching = false;
 unsigned long startTime = 0;       // tempo desde que o esp ligou
-unsigned long delayIRBack = 20000; // contando 20 segundos
+unsigned long delayIRBack = 20000; // delay de 20 segundos no sensor traseiro
 
 
 void setup() {
