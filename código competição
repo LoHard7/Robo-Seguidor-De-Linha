@@ -15,8 +15,8 @@ const int IRR2 = 35; // sensor direito da ponta
 const int IRBACK = 19; // sensor traseiro
 
 // PWM
-const int speed = 200;
-const int curveSpeed = 150;      // velocidade de curva 
+const int speed = 255;
+const int curveSpeed = 160;      // velocidade de curva 
 const int searchSpeed = 150;     // velocidade de busca
 const int backSpeed = 150;       // velocidade de marcha ré
 
@@ -25,7 +25,7 @@ String lastDirection = "forward";
 unsigned long lostTime = 0;
 bool searching = false;
 unsigned long startTime = 0;       // tempo desde que o esp ligou
-unsigned long delayIRBack = 20000; // delay de 20 segundos no sensor traseiro
+unsigned long delayIRBack = 19000; // delay de 20 segundos no sensor traseiro
 
 
 void setup() {
@@ -77,27 +77,27 @@ void loop() {
   }
 //BY LOHARD
   //logica pista preta, linhas brancas
-  if (MID == HIGH) {
+  if (MID == LOW) {
     forwardMotors();
     lastDirection = "forward";
-    searching = false;
+   searching = false;
   }
-  else if (L1 == HIGH) {
+  else if (L1 == LOW) {
     adjustRight();
     lastDirection = "right";
-    searching = false;
+searching = false;
   }
-  else if (R1 == HIGH) {
+  else if (R1 == LOW) {
     adjustLeft();
     lastDirection = "left";
     searching = false;
   }
-  else if (L2 == HIGH) {
+  else if (L2 == LOW) {
     turnRight();
     lastDirection = "right";
     searching = false;
   }
-  else if (R2 == HIGH) {
+  else if (R2 == LOW) {
     turnLeft();
     lastDirection = "left";
     searching = false;
@@ -105,12 +105,12 @@ void loop() {
   else {
     if (!searching) {
       lostTime = millis();
-      searching = true;
+   searching = true;
     }
-    searchLine();
+               searchLine();
   }
 
-  delay(5);
+  delay(10);
 }
 
 //  Movimento
@@ -223,4 +223,4 @@ void searchLine() {
     analogWrite(ENA, backSpeed);
     analogWrite(ENB, backSpeed);
   }
-}
+
