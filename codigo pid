@@ -1,0 +1,125 @@
+// Pinos dos motores
+const int IN1 = 27;
+const int IN2 = 14;
+const int IN3 = 12;
+const int IN4 = 13;
+const int ENA = 21;
+const int ENB = 22;
+
+// Sensores
+const int IRMID = 33; 
+const int IRL1 = 25; 
+const int IRL2 = 26; 
+const int IRR1 = 32; 
+const int IRR2 = 35; 
+const int IRBACK = 19; 
+
+// PID
+float Kp = 40.0;
+float Ki = 0.0;
+float Kd = 25.0;
+
+float error = 0, lastError = 0, integral = 0;
+
+// Controle de tempo e sensor traseiro
+unsigned long startTime = 0;       
+unsigned long delayIRBack = 19000; 
+bool paradoPeloSensorBack = false;
+
+void setup() {
+  // Motores
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  // Sensores
+  pinMode(IRMID, INPUT);
+  pinMode(IRL1, INPUT);
+  pinMode(IRL2, INPUT);
+  pinMode(IRR1, INPUT);
+  pinMode(IRR2, INPUT);
+  pinMode(IRBACK, INPUT);
+
+  stopMotors();
+  delay(2000);
+  startTime = millis();
+}
+
+void loop() {
+  if (paradoPeloSensorBack) {
+    stopMotors();
+    return;
+  }
+
+  int MID = digitalRead(IRMID);
+  int L1 = digitalRead(IRL1);
+  int L2 = digitalRead(IRL2);
+  int R1 = digitalRead(IRR1);
+  int R2 = digitalRead(IRR2);
+  int BACK = digitalRead(IRBACK);
+
+  // Sensor traseiro
+  if (millis() - startTime >= delayIRBack) {
+    if (BACK == LOW) {
+      delay(500);
+      stopMotors();
+      paradoPeloSensorBack = true;
+      return;
+    }
+  }
+
+  // === Cálculo do erro ===
+  int position = 0;
+  int count = 0;
+
+  if (L2 == LOW) { position += -2; count++; }
+  if (L1 == LOW) { position += -1; count++; }
+  if (MID == LOW){ position +=  0; count++; }
+  if (R1 == LOW) { position += +1; count++; }
+  if (R2 == LOW) { position += +2; count++; }
+
+  if (count > 0) {
+    error = (float)position / count;
+  } else {
+    // se perder a linha, mantém último erro
+    error = lastError;
+  }
+
+  // === PID ===
+  integral += error;
+  float derivative = error - lastError;
+  float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
+
+  lastError = error;
+
+  // === Controle dos motores ===
+  int baseSpeed = 200;  
+  int leftSpeed = baseSpeed - correction;
+  int rightSpeed = baseSpeed + correction;
+
+  leftSpeed = constrain(leftSpeed, 0, 255);
+  rightSpeed = constrain(rightSpeed, 0, 255);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+
+  analogWrite(ENA, leftSpeed);
+  analogWrite(ENB, rightSpeed);
+
+  delay(10);
+}
+
+// Função de parar
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}
