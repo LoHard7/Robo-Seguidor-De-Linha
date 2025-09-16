@@ -1,0 +1,198 @@
+#include <QTRSensors.h>
+
+QTRSensors qtr;
+const uint8_t SensorCount = 8;
+uint16_t sensorValues[SensorCount];
+
+// Constantes PID (valores iniciais, ajustáveis via Serial)
+float Kp = 0.1;
+float Ki = 0.039;
+float Kd = 1.3;  
+int P, I, D;
+int lastError = 0;
+
+// Controle de funcionamento
+boolean onoff = false;
+
+// Velocidade máxima e base dos motores
+const uint8_t maxspeeda = 255;
+const uint8_t maxspeedb = 255;
+const uint8_t basespeeda = 100;
+const uint8_t basespeedb = 100;
+
+// Pinos do driver TB6612FNG
+#define AIN1  19
+#define AIN2  27
+#define BIN1  14
+#define BIN2  12
+#define PWMA  21
+#define PWMB  22
+#define STBY  18   // standby do TB6612 (opcional)
+
+// Botões
+#define buttoncalibrate 23
+#define buttonstart  5
+
+// pino IR dos leds
+#define IRled 4
+
+boolean line = true; // 0 -> pista branca | 1 -> pista preta
+
+void setup() {
+  Serial.begin(115200);
+
+  // Configuração dos sensores QTR
+  qtr.setTypeAnalog();
+  qtr.setSensorPins((const uint8_t[]){36, 39, 34, 35, 32, 33, 25, 26}, SensorCount);
+  qtr.setEmitterPin(IRled); // LED dos sensores
+
+  // Configuração dos pinos dos motores
+  pinMode(AIN1, OUTPUT);
+  pinMode(AIN2, OUTPUT);
+  pinMode(BIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
+  pinMode(PWMA, OUTPUT);
+  pinMode(PWMB, OUTPUT);
+  pinMode(STBY, OUTPUT);
+  digitalWrite(STBY, HIGH); // ativa o driver
+
+  delay(500);
+  pinMode(2, OUTPUT);
+  pinMode(buttonstart, INPUT_PULLUP);
+  pinMode(buttoncalibrate, INPUT_PULLUP);
+
+  boolean Ok = false;
+  while (!Ok) {
+    if (!digitalRead(buttoncalibrate)) {
+      calibration();
+      Ok = true;
+    }
+  }
+
+  forward_brake(0, 0);
+
+  Serial.println("=== Controle PID Ativado ===");
+  Serial.println("Digite no Serial Monitor:");
+  Serial.println("Kp 0.2   -> muda Kp para 0.2");
+  Serial.println("Ki 0.05  -> muda Ki para 0.05");
+  Serial.println("Kd 1.5   -> muda Kd para 1.5");
+}
+
+void calibration() {
+  digitalWrite(2, HIGH);
+  for (uint16_t i = 0; i < 200; i++) {
+    qtr.calibrate();
+  }
+  digitalWrite(2, LOW);
+}
+
+void loop() {
+  static unsigned long timeMilles;
+
+  // --- Ajuste PID via Serial ---
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    if (input.startsWith("Kp")) {
+      Kp = input.substring(2).toFloat();
+      Serial.print("Novo Kp = "); Serial.println(Kp);
+    }
+    else if (input.startsWith("Ki")) {
+      Ki = input.substring(2).toFloat();
+      Serial.print("Novo Ki = "); Serial.println(Ki);
+    }
+    else if (input.startsWith("Kd")) {
+      Kd = input.substring(2).toFloat();
+      Serial.print("Novo Kd = "); Serial.println(Kd);
+    }
+  }
+
+  // --- Botão Start/Stop ---
+  if (!digitalRead(buttonstart)) {
+    delay(200);
+    while (!digitalRead(buttonstart));
+    onoff = !onoff;
+    if (onoff) {
+      delay(1000);
+      timeMilles = millis();
+    }
+    else delay(50);
+  }
+
+  if (onoff) {
+    PID_control();
+    if ((millis() - timeMilles) >= 315000) {
+      forward_brake(0, 0);
+      digitalWrite(2, HIGH);
+      while (1);
+    }
+  }
+  else forward_brake(0, 0);
+}
+
+// ----------------- CONTROLE DE MOTORES -----------------
+
+void setMotorA(int speed) {
+  if (speed > 0) {
+    digitalWrite(AIN1, HIGH);
+    digitalWrite(AIN2, LOW);
+    analogWrite(PWMA, speed);
+  } else if (speed < 0) {
+    digitalWrite(AIN1, LOW);
+    digitalWrite(AIN2, HIGH);
+    analogWrite(PWMA, -speed);
+  } else {
+    digitalWrite(AIN1, LOW);
+    digitalWrite(AIN2, LOW);
+    analogWrite(PWMA, 0);
+  }
+}
+
+void setMotorB(int speed) {
+  if (speed > 0) {
+    digitalWrite(BIN1, HIGH);
+    digitalWrite(BIN2, LOW);
+    analogWrite(PWMB, speed);
+  } else if (speed < 0) {
+    digitalWrite(BIN1, LOW);
+    digitalWrite(BIN2, HIGH);
+    analogWrite(PWMB, -speed);
+  } else {
+    digitalWrite(BIN1, LOW);
+    digitalWrite(BIN2, LOW);
+    analogWrite(PWMB, 0);
+  }
+}
+
+void forward_brake(int posa, int posb) {
+  setMotorA(posa);
+  setMotorB(posb);
+}
+
+// ----------------- PID -----------------
+
+void PID_control() {
+  uint16_t position;
+
+  !line ?  position = qtr.readLineBlack(sensorValues) :  position = qtr.readLineWhite(sensorValues);
+
+  int error = 3500 - position;
+
+  // PID
+  P = error;
+  I = I + error;
+  if (I > 1000) I = 1000;   // saturação do I
+  if (I < -1000) I = -1000;
+  D = error - lastError;
+  lastError = error;
+
+  int motorspeed = P * Kp + I * Ki + D * Kd;
+
+  // Ajuste das velocidades
+  int motorspeeda = basespeeda + motorspeed;
+  int motorspeedb = basespeedb - motorspeed;
+
+  if (motorspeeda > maxspeeda) motorspeeda = maxspeeda;
+
+  forward_brake(motorspeeda, motorspeedb);
+}
