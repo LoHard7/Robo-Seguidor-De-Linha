@@ -1,0 +1,220 @@
+// --- CONFIG ---
+#define AIN1  19
+#define AIN2  27
+#define BIN1  14
+#define BIN2  12
+#define PWMA  21
+#define PWMB  22
+#define STBY  18   // standby do TB6612 (desliga os motores)
+
+#define IRMID 34
+#define IRL1  36
+#define IRL2  39
+#define IRR1  35
+#define IRR2  32
+
+#define BUTTON_PIN 5
+
+// PWM
+const int pwmChannelA = 0;
+const int pwmChannelB = 1;
+const int pwmFreq = 500;
+const int pwmResolution = 8;
+
+const int speed = 255;
+const int curveSpeed = 160;
+const int searchSpeed = 150;
+const int backSpeed = 150;
+
+// Controle corrida
+bool raceStarted = false;
+unsigned long raceStartTime = 0;
+const unsigned long STBY_TIMEOUT = 30000; // tempo até desligar STBY (30s)
+
+// Memória direção
+String lastDirection = "forward";
+unsigned long lostTime = 0;
+bool searching = false;
+
+void setup() {
+  pinMode(AIN1, OUTPUT);
+  pinMode(AIN2, OUTPUT);
+  pinMode(BIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
+  pinMode(STBY, OUTPUT);
+
+  digitalWrite(STBY, HIGH); // driver ligado no início
+
+  ledcSetup(pwmChannelA, pwmFreq, pwmResolution);
+  ledcSetup(pwmChannelB, pwmFreq, pwmResolution);
+  ledcAttachPin(PWMA, pwmChannelA);
+  ledcAttachPin(PWMB, pwmChannelB);
+
+  pinMode(IRMID, INPUT);
+  pinMode(IRL1, INPUT);
+  pinMode(IRL2, INPUT);
+  pinMode(IRR1, INPUT);
+  pinMode(IRR2, INPUT);
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  stopMotors();
+  delay(500);
+}
+
+void loop() {
+  // Espera o botão
+  if (!raceStarted) {
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      delay(50);
+      if (digitalRead(BUTTON_PIN) == LOW) {
+        stopMotors();
+        delay(3000); // espera antes de iniciar
+        raceStarted = true;
+        raceStartTime = millis(); // marca o início da corrida
+      }
+    }
+    return;
+  }
+
+  // Verifica se já passou o tempo e desliga STBY
+  if (millis() - raceStartTime >= STBY_TIMEOUT) {
+    stopMotors();
+    digitalWrite(STBY, LOW); // desliga driver
+    return; // não faz mais nada
+  }
+
+  // --- Seguidor de linha ---
+  int MID = digitalRead(IRMID);
+  int L1 = digitalRead(IRL1);
+  int L2 = digitalRead(IRL2);
+  int R1 = digitalRead(IRR1);
+  int R2 = digitalRead(IRR2);
+
+  if (MID == LOW) {
+    forwardMotors();
+    lastDirection = "forward";
+    searching = false;
+  }
+  else if (L1 == LOW) {
+    adjustRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R1 == LOW) {
+    adjustLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else if (L2 == LOW) {
+    turnRight();
+    lastDirection = "right";
+    searching = false;
+  }
+  else if (R2 == LOW) {
+    turnLeft();
+    lastDirection = "left";
+    searching = false;
+  }
+  else {
+    if (!searching) {
+      lostTime = millis();
+      searching = true;
+    }
+    searchLine();
+  }
+
+  delay(10);
+}
+
+// ======================== MOTORES ========================
+
+void forwardMotors() {
+  digitalWrite(AIN1, HIGH);
+  digitalWrite(AIN2, LOW);
+  digitalWrite(BIN1, HIGH);
+  digitalWrite(BIN2, LOW);
+  ledcWrite(pwmChannelA, speed);
+  ledcWrite(pwmChannelB, speed);
+}
+
+void stopMotors() {
+  ledcWrite(pwmChannelA, 0);
+  ledcWrite(pwmChannelB, 0);
+  digitalWrite(AIN1, LOW);
+  digitalWrite(AIN2, LOW);
+  digitalWrite(BIN1, LOW);
+  digitalWrite(BIN2, LOW);
+}
+
+void adjustRight() {
+  digitalWrite(AIN1, HIGH);
+  digitalWrite(AIN2, LOW);
+  digitalWrite(BIN1, HIGH);
+  digitalWrite(BIN2, LOW);
+  ledcWrite(pwmChannelA, speed);
+  ledcWrite(pwmChannelB, curveSpeed);
+}
+
+void adjustLeft() {
+  digitalWrite(AIN1, HIGH);
+  digitalWrite(AIN2, LOW);
+  digitalWrite(BIN1, HIGH);
+  digitalWrite(BIN2, LOW);
+  ledcWrite(pwmChannelA, curveSpeed);
+  ledcWrite(pwmChannelB, speed);
+}
+
+void turnRight() {
+  digitalWrite(AIN1, HIGH);
+  digitalWrite(AIN2, LOW);
+  digitalWrite(BIN1, LOW);
+  digitalWrite(BIN2, HIGH);
+  ledcWrite(pwmChannelA, speed);
+  ledcWrite(pwmChannelB, speed);
+}
+
+void turnLeft() {
+  digitalWrite(AIN1, LOW);
+  digitalWrite(AIN2, HIGH);
+  digitalWrite(BIN1, HIGH);
+  digitalWrite(BIN2, LOW);
+  ledcWrite(pwmChannelA, speed);
+  ledcWrite(pwmChannelB, speed);
+}
+
+// ======================== BUSCA ========================
+
+void searchLine() {
+  unsigned long currentTime = millis();
+  unsigned long elapsed = currentTime - lostTime;
+
+  if (elapsed < 2000) {
+    if (lastDirection == "right") {
+      turnRight();
+    } else if (lastDirection == "left") {
+      turnLeft();
+    } else {
+      turnRight();
+    }
+    ledcWrite(pwmChannelA, searchSpeed);
+    ledcWrite(pwmChannelB, searchSpeed);
+  }
+  else if (elapsed < 4000) {
+    if (lastDirection == "right") {
+      turnLeft();
+    } else {
+      turnRight();
+    }
+    ledcWrite(pwmChannelA, searchSpeed);
+    ledcWrite(pwmChannelB, searchSpeed);
+  }
+  else {
+    digitalWrite(AIN1, LOW);
+    digitalWrite(AIN2, HIGH);
+    digitalWrite(BIN1, LOW);
+    digitalWrite(BIN2, HIGH);
+    ledcWrite(pwmChannelA, backSpeed);
+    ledcWrite(pwmChannelB, backSpeed);
+  }
+}
