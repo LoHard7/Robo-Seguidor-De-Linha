@@ -25,8 +25,8 @@ const uint8_t basespeedb = 255;
 #define AIN2  5
 #define PWMA  3   // PWM motor A
 
-#define BIN1  10
-#define BIN2  9
+#define BIN1  9
+#define BIN2  10
 #define PWMB  11  // PWM motor B
 
 #define STBY  8   // Standby
