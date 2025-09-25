@@ -33,7 +33,7 @@ const uint8_t basespeedb = 255;
 
 // Botões
 #define buttoncalibrate 12
-#define buttonstart  13
+#define buttonstart  2
 
 // Pino IR dos leds
 #define IRled 4
